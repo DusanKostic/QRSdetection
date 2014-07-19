@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include "qrs_definitions.h"
 #include "qrs_utils.h"
+#include "qrs_detection.h"
 
 /* TODO:
  * Acquire input filename, output filename,
@@ -20,19 +21,22 @@
 
 int main(int argc, char * argv[])
 {
-    qrs_signal * signal = NULL;
     qrs_status status = qrs_no_err;
+    qrs_signal * input_signal = NULL;
+    qrs_signal * output_signal = NULL;
+
     printf("Pan-Tompkins QRS detection algorithm\n");
 
-    signal = qrs_alloc_signal(INPUT_LENGTH, INPUT_FREQUENCY);
-    if (signal == NULL)
+    input_signal  = qrs_alloc_signal(INPUT_LENGTH, INPUT_FREQUENCY);
+    output_signal = qrs_alloc_signal(INPUT_LENGTH, INPUT_FREQUENCY);
+    if (input_signal == NULL || output_signal == NULL)
     {
         printf("Memory allocation failed.\n");
         goto bail;
     }
 
     printf("Reading input data from file...\n");
-    status = qrs_read_signal_from_file(signal, INPUT_FILENAME);
+    status = qrs_read_signal_from_file(input_signal, INPUT_FILENAME);
     if (status != qrs_no_err)
     {
         printf("Read signal from file failed.\n");
@@ -40,8 +44,17 @@ int main(int argc, char * argv[])
     }
     printf("Done.\n");
 
+    printf("QRS detection start...\n");
+    status = qrs_detection_core(input_signal, output_signal);
+    if (status != qrs_no_err)
+    {
+        printf("QRS detection failed.\n");
+        goto bail;
+    }
+    printf("Done.\n");
+
     printf("Writing output data to file...\n");
-    status = qrs_write_signal_to_file(signal, OUTPUT_FILENAME);
+    status = qrs_write_signal_to_file(output_signal, OUTPUT_FILENAME);
     if (status != qrs_no_err)
     {
         printf("Write signal to file failed.\n");
@@ -50,7 +63,8 @@ int main(int argc, char * argv[])
     printf("Done.\n");
 
 bail:
-    qrs_free_signal(signal);
+    qrs_free_signal(input_signal);
+    qrs_free_signal(output_signal);
 
     return 0;
 }

@@ -23,7 +23,8 @@ typedef enum
     qrs_no_err,
     qrs_general_err,
     qrs_memalloc_err,
-    qrs_fileio_err
+    qrs_fileio_err,
+    qrs_bad_arg_err
 }qrs_status;
 
 #endif /* QRS_DEFINITIONS_H_ */
