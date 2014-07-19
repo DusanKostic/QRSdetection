@@ -14,5 +14,8 @@ qrs_status qrs_read_signal_from_file(qrs_signal * signal, char * filename);
 
 qrs_status qrs_write_signal_to_file(qrs_signal * signal, char * filename);
 
+qrs_signal * qrs_alloc_signal(int length, int frequency);
+
+void qrs_free_signal(qrs_signal * signal);
 
 #endif /* QRS_UTILS_H_ */
