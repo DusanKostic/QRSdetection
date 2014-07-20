@@ -8,7 +8,9 @@
 #ifndef QRS_DEFINITIONS_H_
 #define QRS_DEFINITIONS_H_
 
-#define DEFAULT_FREQUENCY 256
+#define QRS_DEF_FREQUENCY  (256)
+#define QRS_DEF_FILT_SIZE  (7)
+#define QRS_MEDFILT_WINDOW (10)
 
 typedef struct
 {

@@ -120,3 +120,22 @@ void qrs_free_signal(qrs_signal * signal)
     free(signal);
     signal = NULL;
 }
+
+void qrs_write_vector_to_file(int * vector, int length, char * filename)
+{
+    FILE * fp = NULL;
+    int i;
+
+    fp = fopen(filename, "w");
+    if (fp == NULL)
+    {
+        return;
+    }
+
+    for(i = 0; i < length; ++i)
+    {
+        fprintf(fp, "%d\n", vector[i]);
+    }
+
+    fclose(fp);
+}
