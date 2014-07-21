@@ -9,6 +9,7 @@
 #include "qrs_definitions.h"
 #include "qrs_utils.h"
 #include "qrs_detection.h"
+#include "qrs_logger.h"
 
 /* TODO:
  * Acquire input filename, output filename,
@@ -18,6 +19,7 @@
 #define OUTPUT_FILENAME "./test/out_1.txt"
 #define INPUT_LENGTH    (10000)
 #define INPUT_FREQUENCY (500)
+#define LOG_FILENAME    "./test/qrs_log.txt"
 
 int main(int argc, char * argv[])
 {
@@ -25,44 +27,30 @@ int main(int argc, char * argv[])
     qrs_signal * input_signal = NULL;
     qrs_signal * output_signal = NULL;
 
-    printf("Pan-Tompkins QRS detection algorithm\n");
+    qrs_start_logging(LOG_FILENAME);
+
+    qrs_log_info("Pan-Tompkins QRS detection algorithm.");
 
     input_signal  = qrs_alloc_signal(INPUT_LENGTH, INPUT_FREQUENCY);
     output_signal = qrs_alloc_signal(INPUT_LENGTH, INPUT_FREQUENCY);
-    if (input_signal == NULL || output_signal == NULL)
-    {
-        printf("Memory allocation failed.\n");
-        goto bail;
-    }
+    QRS_ASSERT(input_signal != NULL && output_signal != NULL,
+               "Memory allocation failed.", bail);
 
-    printf("Reading input data from file...\n");
+    qrs_log_info("Reading input data from file");
     status = qrs_read_signal_from_file(input_signal, INPUT_FILENAME);
-    if (status != qrs_no_err)
-    {
-        printf("Read signal from file failed.\n");
-        goto bail;
-    }
-    printf("Done.\n");
+    QRS_ASSERT(status == qrs_no_err, "Read signal from file failed.", bail);
 
-    printf("QRS detection start...\n");
+    qrs_log_info("QRS detection start.");
     status = qrs_detection_core(input_signal, output_signal);
-    if (status != qrs_no_err)
-    {
-        printf("QRS detection failed.\n");
-        goto bail;
-    }
-    printf("Done.\n");
+    QRS_ASSERT(status == qrs_no_err, "QRS detection failed.", bail);
 
-    printf("Writing output data to file...\n");
+    qrs_log_info("Writing output data to file.");
     status = qrs_write_signal_to_file(output_signal, OUTPUT_FILENAME);
-    if (status != qrs_no_err)
-    {
-        printf("Write signal to file failed.\n");
-        goto bail;
-    }
-    printf("Done.\n");
+    QRS_ASSERT(status == qrs_no_err, "Write signal to file failed.", bail);
 
 bail:
+    qrs_stop_logging();
+
     qrs_free_signal(input_signal);
     qrs_free_signal(output_signal);
 

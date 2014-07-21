@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include "qrs_utils.h"
 #include "qrs_definitions.h"
+#include "qrs_logger.h"
 
 qrs_status qrs_read_signal_from_file(qrs_signal * signal, char * filename)
 {
@@ -17,11 +18,8 @@ qrs_status qrs_read_signal_from_file(qrs_signal * signal, char * filename)
     int i;
 
     fp = fopen(filename, "r");
-    if (fp == NULL)
-    {
-        status = qrs_fileio_err;
-        goto bail;
-    }
+    QRS_ASSERT_DO(fp != NULL, status = qrs_fileio_err,
+                  "Failed to open file.", bail);
 
     /* NOTE:
      * Test data is in format:
@@ -48,11 +46,8 @@ qrs_status qrs_write_signal_to_file(qrs_signal * signal, char * filename)
     int i;
 
     fp = fopen(filename, "w");
-    if (fp == NULL)
-    {
-        status = qrs_fileio_err;
-        goto bail;
-    }
+    QRS_ASSERT_DO(fp != NULL, status = qrs_fileio_err,
+                  "Failed to open file.", bail);
 
     for(i = 0; i < signal->length; ++i)
     {
@@ -70,10 +65,7 @@ qrs_signal * qrs_alloc_signal(int length, int frequency)
     qrs_signal * signal = NULL;
 
     signal = malloc(sizeof(qrs_signal));
-    if (signal == NULL)
-    {
-        goto bail;
-    }
+    QRS_ASSERT(signal != NULL, "Allocation failed.", bail);
 
     signal->data = malloc(length * sizeof(int));
     if (signal->data == NULL)
@@ -127,10 +119,7 @@ void qrs_write_vector_to_file(int * vector, int length, char * filename)
     int i;
 
     fp = fopen(filename, "w");
-    if (fp == NULL)
-    {
-        return;
-    }
+    QRS_ASSERT(fp != NULL, "Failed to open file.", bail);
 
     for(i = 0; i < length; ++i)
     {
@@ -138,4 +127,16 @@ void qrs_write_vector_to_file(int * vector, int length, char * filename)
     }
 
     fclose(fp);
+bail:
+    return;
+}
+
+void qrs_copy_vector(int * input, int * output, int length)
+{
+    int i;
+
+    for(i = 0; i < length; ++i)
+    {
+        output[i] = input[i];
+    }
 }

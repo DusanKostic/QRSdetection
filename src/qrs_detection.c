@@ -9,17 +9,12 @@
 #include <math.h>
 #include "qrs_definitions.h"
 #include "qrs_detection.h"
-
-static qrs_status qrs_calc_mean_value(int * input, int length, int * output);
-
-static qrs_status qrs_vector_sub_const(int * input, int length, int value);
+#include "qrs_logger.h"
+#include "qrs_utils.h"
+#include "qrs_arithmetics.h"
 
 static qrs_status qrs_differentiate_vector(int * input, int * output,
                                            int input_length);
-
-static qrs_status qrs_copy_vector(int * input, int * output, int length);
-
-static qrs_status qrs_vector_mul(int * in_out, int * input, int length);
 
 static qrs_status qrs_integrate_over_window(int * input, int * output,
                                             int length, int frequency);
@@ -30,10 +25,6 @@ static qrs_status qrs_filter_1d(int * input, int * output, int length,
 static qrs_status qrs_median_filter_1d(int * input, int * output,
                                        int length, int window_length);
 
-static int qrs_vector_median(int * input, int length);
-
-static int cmp_func_qsort (const void * a, const void * b);
-
 qrs_status qrs_detection_core(qrs_signal * input, qrs_signal * output)
 {
     qrs_status status = qrs_no_err;
@@ -41,113 +32,40 @@ qrs_status qrs_detection_core(qrs_signal * input, qrs_signal * output)
     int * diff_data = NULL;
     int diff_length;
 
-    if (input == NULL || output == NULL)
-    {
-        status = qrs_bad_arg_err;
-        goto bail;
-    }
+    QRS_ASSERT_DO(input != NULL && output != NULL, status = qrs_bad_arg_err,
+                  "Bad input arguments - NULL pointer.", bail);
 
     /* Find mean value of input signal */
-    status = qrs_calc_mean_value(input->data, input->length, &mean_value);
-    if (status != qrs_no_err)
-    {
-        printf("Calc mean value of input signal failed.\n");
-        goto bail;
-    }
+    mean_value = qrs_calc_mean_value(input->data, input->length);
 
     /* Remove mean from input signal */
     status = qrs_vector_sub_const(input->data, input->length, mean_value);
-    if (status != qrs_no_err)
-    {
-        printf("Remove mean from input signal failed.\n");
-        goto bail;
-    }
+    QRS_ASSERT(status == qrs_no_err, "Remove mean from input failed.", bail);
 
     /* Differentiate data */
     diff_length = input->length - 1;
     diff_data = malloc(diff_length * sizeof(int));
+    QRS_ASSERT(diff_data != NULL, "Allocation failed.", bail);
 
     status = qrs_differentiate_vector(input->data, diff_data, input->length);
-    if (status != qrs_no_err)
-    {
-        printf("Differentiate input data failed.\n");
-        goto bail;
-    }
+    QRS_ASSERT(status == qrs_no_err, "Differentiate input data failed.", bail);
 
     /* Square differentiated data */
     status = qrs_vector_mul(diff_data, diff_data, diff_length);
-    if (status != qrs_no_err)
-    {
-        printf("Square differentiated data failed.\n");
-        goto bail;
-    }
+    QRS_ASSERT(status == qrs_no_err, "Square data failed.", bail);
 
     /* Integrate data over window */
     status = qrs_integrate_over_window(diff_data, output->data, diff_length,
                                        input->frequency);
-    if (status != qrs_no_err)
-    {
-        printf("Integration of data failed.\n");
-        goto bail;
-    }
+    QRS_ASSERT(status == qrs_no_err, "Integration of data failed.", bail);
 
     /* Copy result to output signal */
-    status |= qrs_copy_vector(input->time_axis, output->time_axis, diff_length);
-    if (status != qrs_no_err)
-    {
-        printf("Copy results to output failed.\n");
-        goto bail;
-    }
     output->length = diff_length;
+    qrs_copy_vector(input->time_axis, output->time_axis, diff_length);
 
 bail:
-    if (diff_data != NULL)
-    {
-        free(diff_data);
-    }
-    return status;
-}
+    QRS_FREE(diff_data);
 
-static qrs_status qrs_calc_mean_value(int * input, int length, int * output)
-{
-    qrs_status status = qrs_no_err;
-    long int sum = 0;
-    int i;
-
-    if (input == NULL)
-    {
-        status = qrs_bad_arg_err;
-        goto bail;
-    }
-
-    for(i = 0; i < length; ++i)
-    {
-        sum += input[i];
-    }
-
-    *output = sum / (float)length;
-
-bail:
-    return status;
-}
-
-static qrs_status qrs_vector_sub_const(int * input, int length, int value)
-{
-    qrs_status status = qrs_no_err;
-    int i;
-
-    if (input == NULL)
-    {
-        status = qrs_bad_arg_err;
-        goto bail;
-    }
-
-    for(i = 0; i < length; ++i)
-    {
-        input[i] -= value;
-    }
-
-bail:
     return status;
 }
 
@@ -157,55 +75,12 @@ static qrs_status qrs_differentiate_vector(int * input, int * output,
     qrs_status status = qrs_no_err;
     int i;
 
-    if (input == NULL || output == NULL)
-    {
-        status = qrs_bad_arg_err;
-        goto bail;
-    }
+    QRS_ASSERT_DO(input != NULL && output != NULL, status = qrs_bad_arg_err,
+                  "Input pointer NULL.", bail);
 
     for(i = 0; i < input_length - 1; ++i)
     {
         output[i] = input[i + 1] - input[i];
-    }
-
-bail:
-    return status;
-}
-
-static qrs_status qrs_copy_vector(int * input, int * output, int length)
-{
-    qrs_status status = qrs_no_err;
-    int i;
-
-    if (input == NULL || output == NULL)
-    {
-        status = qrs_bad_arg_err;
-        goto bail;
-    }
-
-    for(i = 0; i < length; ++i)
-    {
-        output[i] = input[i];
-    }
-
-bail:
-    return status;
-}
-
-static qrs_status qrs_vector_mul(int * in_out, int * input, int length)
-{
-    qrs_status status = qrs_no_err;
-    int i;
-
-    if (in_out == NULL || input == NULL)
-    {
-        status = qrs_bad_arg_err;
-        goto bail;
-    }
-
-    for(i = 0; i < length; ++i)
-    {
-        in_out[i] = in_out[i] * input[i];
     }
 
 bail:
@@ -221,11 +96,8 @@ static qrs_status qrs_integrate_over_window(int * input, int * output,
     int * temp_buff = NULL;
     int i;
 
-    if (input == NULL || output == NULL)
-    {
-        status = qrs_bad_arg_err;
-        goto bail;
-    }
+    QRS_ASSERT_DO(input != NULL && output != NULL, status = qrs_bad_arg_err,
+                  "Input pointer NULL.", bail);
 
     if (frequency >= QRS_DEF_FREQUENCY)
     {
@@ -240,39 +112,25 @@ static qrs_status qrs_integrate_over_window(int * input, int * output,
     /* Filter input data with box filter of window_size */
     temp_buff = malloc(length * sizeof(int));
     kernel = malloc(kernel_length * sizeof(int));
-    if (kernel == NULL || temp_buff == NULL)
-    {
-        printf("Failed to allocate memory.\n");
-        goto bail;
-    }
+    QRS_ASSERT_DO(temp_buff != NULL && kernel != NULL,
+                  status = qrs_memalloc_err,
+                  "Allocation failed.", bail);
+
     for(i = 0; i < kernel_length; ++i)
     {
         kernel[i] = 1;
     }
     status = qrs_filter_1d(input, temp_buff, length, kernel, kernel_length, 1);
-    if (status != qrs_no_err)
-    {
-        printf("Box filter failed.\n");
-        goto bail;
-    }
+    QRS_ASSERT(status == qrs_no_err, "Box filter failed.", bail);
 
     /* Median filtering of input data over window */
     status = qrs_median_filter_1d(temp_buff, output, length, QRS_MEDFILT_WINDOW);
-    if (status != qrs_no_err)
-    {
-        printf("Median filter failed.\n");
-        goto bail;
-    }
+    QRS_ASSERT(status == qrs_no_err, "Median filter failed.", bail);
 
 bail:
-    if (kernel)
-    {
-        free(kernel);
-    }
-    if (temp_buff)
-    {
-        free(temp_buff);
-    }
+    QRS_FREE(kernel);
+    QRS_FREE(temp_buff);
+
     return status;
 }
 
@@ -285,11 +143,11 @@ static qrs_status qrs_filter_1d(int * input, int * output, int length,
     int start_kernel;
     int sum;
 
-    if (input == NULL || output == NULL || kernel == NULL)
-    {
-        status = qrs_bad_arg_err;
-        goto bail;
-    }
+    QRS_ASSERT_DO(input != NULL && output != NULL && kernel != NULL,
+                  status = qrs_bad_arg_err, "Input pointer NULL.", bail);
+
+    QRS_ASSERT_DO(length > kernel_length, status = qrs_bad_arg_err,
+                  "Invalid length and kernel length.", bail);
 
     for(i = 0; i < length; ++i)
     {
@@ -317,18 +175,13 @@ static qrs_status qrs_median_filter_1d(int * input, int * output,
     int start;
     int i, j;
 
-    if (input == NULL || output == NULL)
-    {
-        status = qrs_bad_arg_err;
-        goto bail;
-    }
+    QRS_ASSERT_DO(input != NULL && output != NULL,
+                  status = qrs_bad_arg_err, "Input pointer NULL.", bail);
 
     window = malloc(window_length * sizeof(int));
-    if (window == NULL)
-    {
-        status = qrs_memalloc_err;
-        goto bail;
-    }
+    QRS_ASSERT_DO(window != NULL, status = qrs_memalloc_err,
+                  "Allocation failed.", bail);
+
     num_elems_before = window_length / 2 ;
 
     for(i = 0; i < length; ++i)
@@ -349,36 +202,7 @@ static qrs_status qrs_median_filter_1d(int * input, int * output,
     }
 
 bail:
-    if (window)
-    {
-        free(window);
-    }
+    QRS_FREE(window);
+
     return status;
-}
-
-static int qrs_vector_median(int * input, int length)
-{
-    int odd_length;
-    int median;
-
-    odd_length = length % 2;
-
-    qsort(input, length, sizeof(int), cmp_func_qsort);
-
-    if (odd_length)
-    {
-        median = input[length / 2];
-    }
-    else
-    {
-        median = input[length / 2 - 1] + input[length / 2];
-        median /= 2;
-    }
-
-    return median;
-}
-
-static int cmp_func_qsort (const void * a, const void * b)
-{
-   return ( *(int*)a - *(int*)b );
 }
