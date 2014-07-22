@@ -10,7 +10,8 @@
 
 #include "qrs_definitions.h"
 
-qrs_status qrs_detection_core(qrs_signal * input, qrs_signal * output);
+qrs_status qrs_detection_core(qrs_signal * input, int ** r_peaks_idx,
+                              int ** s_peaks_idx, int * peak_number);
 
 
 #endif /* QRS_DETECTION_H_ */

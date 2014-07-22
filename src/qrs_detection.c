@@ -17,7 +17,8 @@ static qrs_status qrs_differentiate_vector(int * input, int * output,
                                            int input_length);
 
 static qrs_status qrs_integrate_over_window(int * input, int * output,
-                                            int length, int frequency);
+                                            int length, int frequency,
+                                            int * delay);
 
 static qrs_status qrs_filter_1d(int * input, int * output, int length,
                                 int * kernel, int kernel_length, int scale);
@@ -25,14 +26,34 @@ static qrs_status qrs_filter_1d(int * input, int * output, int length,
 static qrs_status qrs_median_filter_1d(int * input, int * output,
                                        int length, int window_length);
 
-qrs_status qrs_detection_core(qrs_signal * input, qrs_signal * output)
+static qrs_status
+qrs_find_indices_into_boundaries(int * input, int length,
+                                 int ** left_indices, int ** right_indices,
+                                 int * left_length, int * right_length);
+
+static void check_and_realloc(int ** input, int curr_cnt, int * curr_length);
+
+qrs_status qrs_detection_core(qrs_signal * input, int ** r_peaks_idx,
+                              int ** s_peaks_idx, int * peak_number)
 {
     qrs_status status = qrs_no_err;
     int mean_value;
     int * diff_data = NULL;
+    int * integral_data = NULL;
+    int * placeholder_ptr = NULL;
+    int * left_indices = NULL;
+    int * right_indices = NULL;
+    int integral_length;
     int diff_length;
+    int delay;
+    int max_value;
+    int start, end;
+    int treshold;
+    int left_ind_len;
+    int right_ind_len;
+    int i;
 
-    QRS_ASSERT_DO(input != NULL && output != NULL, status = qrs_bad_arg_err,
+    QRS_ASSERT_DO(input != NULL, status = qrs_bad_arg_err,
                   "Bad input arguments - NULL pointer.", bail);
 
     /* Find mean value of input signal */
@@ -55,16 +76,51 @@ qrs_status qrs_detection_core(qrs_signal * input, qrs_signal * output)
     QRS_ASSERT(status == qrs_no_err, "Square data failed.", bail);
 
     /* Integrate data over window */
-    status = qrs_integrate_over_window(diff_data, output->data, diff_length,
-                                       input->frequency);
+    integral_data = malloc(diff_length * sizeof(int));
+    status = qrs_integrate_over_window(diff_data, integral_data, diff_length,
+                                       input->frequency, &delay);
     QRS_ASSERT(status == qrs_no_err, "Integration of data failed.", bail);
 
-    /* Copy result to output signal */
-    output->length = diff_length;
-    qrs_copy_vector(input->time_axis, output->time_axis, diff_length);
+    /* Remove filter delay for scanning back through ECG */
+    placeholder_ptr = integral_data;
+    integral_data = &integral_data[delay - 1];
+    integral_length = diff_length - (delay - 1);
+
+    /* Segment search area, first find the highest bumps */
+    start = round(diff_length / 4.0) - 1;
+    end   = round(3 * diff_length / 4.0) - 1;
+    max_value = qrs_vector_max_range(integral_data, start, end);
+
+    /* Build an array of segments to look in */
+    treshold = QRS_TRESHOLD * max_value;
+    qrs_vector_gt_treshold(integral_data, integral_length, treshold);
+
+    /* Find indices into boundaries of each segment */
+    status = qrs_find_indices_into_boundaries(integral_data, integral_length,
+                                              &left_indices, &right_indices,
+                                              &left_ind_len, &right_ind_len);
+    QRS_ASSERT(status == qrs_no_err, "Find indices failed.", bail);
+
+    /* Loop through all possibilities */
+    end = min(left_ind_len, right_ind_len);
+
+    *r_peaks_idx = malloc(end * sizeof(int));
+    *s_peaks_idx = malloc(end * sizeof(int));
+    QRS_ASSERT_DO(*r_peaks_idx != NULL && *s_peaks_idx != NULL,
+                  status = qrs_memalloc_err, "Allocation failed.", bail);
+
+    for (i = 0; i < end; ++i)
+    {
+        qrs_vector_minmax_idx_range(input->data, left_indices[i], right_indices[i],
+                                    &(*s_peaks_idx)[i], &(*r_peaks_idx)[i]);
+    }
+    *peak_number = end;
 
 bail:
     QRS_FREE(diff_data);
+    QRS_FREE(placeholder_ptr);
+    QRS_FREE(left_indices);
+    QRS_FREE(right_indices);
 
     return status;
 }
@@ -88,7 +144,8 @@ bail:
 }
 
 static qrs_status qrs_integrate_over_window(int * input, int * output,
-                                            int length, int frequency)
+                                            int length, int frequency,
+                                            int * delay)
 {
     qrs_status status = qrs_no_err;
     int kernel_length;
@@ -108,6 +165,8 @@ static qrs_status qrs_integrate_over_window(int * input, int * output,
     {
         kernel_length = QRS_DEF_FILT_SIZE;
     }
+
+    *delay = ceil(kernel_length / 2.0);
 
     /* Filter input data with box filter of window_size */
     temp_buff = malloc(length * sizeof(int));
@@ -205,4 +264,78 @@ bail:
     QRS_FREE(window);
 
     return status;
+}
+
+static qrs_status
+qrs_find_indices_into_boundaries(int * input, int length,
+                                 int ** left_indices, int ** right_indices,
+                                 int * left_length, int * right_length)
+{
+    qrs_status status = qrs_no_err;
+    int * tmp_left = NULL;
+    int * tmp_right = NULL;
+    int left_cnt = 0;
+    int right_cnt = 0;
+    int diff;
+    int i;
+
+    *left_length = QRS_INDICES_LENGTH;
+    *right_length = QRS_INDICES_LENGTH;
+
+    tmp_left = malloc(*left_length * sizeof(int));
+    tmp_right = malloc(*right_length * sizeof(int));
+    QRS_ASSERT_DO(tmp_left != NULL && tmp_right != NULL,
+                  status = qrs_memalloc_err, "Allocation failed.", bail);
+
+    /* Handle first element of input vector */
+    if (input[0] == 1)
+    {
+        tmp_left[left_cnt] = 0;
+        left_cnt++;
+    }
+
+    for (i = 1; i < length - 1; ++i)
+    {
+        diff = input[i] - input[i - 1];
+        if (diff == 1)
+        {
+            tmp_left[left_cnt] = i;
+            left_cnt++;
+        }
+        if (diff == -1)
+        {
+            tmp_right[right_cnt] = i - 1;
+            right_cnt++;
+        }
+        check_and_realloc(&tmp_left, left_cnt, left_length);
+        check_and_realloc(&tmp_right, right_cnt, right_length);
+    }
+
+    /* Handle last element of input vector */
+    if (input[length - 1] == 1)
+    {
+        tmp_right[right_cnt] = length - 1;
+        right_cnt++;
+    }
+
+    *left_indices = tmp_left;
+    *right_indices = tmp_right;
+    *left_length = left_cnt;
+    *right_length = right_cnt;
+
+bail:
+    return status;
+
+}
+
+static void check_and_realloc(int ** input, int curr_cnt, int * curr_length)
+{
+    int new_length;
+
+    if (curr_cnt == *curr_length)
+    {
+        new_length = *curr_length + QRS_INDICES_LENGTH;
+        *input = realloc(*input, new_length * sizeof(int));
+        *curr_length = new_length;
+    }
 }

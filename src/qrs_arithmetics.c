@@ -6,6 +6,7 @@
  */
 
 #include <stdlib.h>
+#include <math.h>
 #include "qrs_arithmetics.h"
 #include "qrs_definitions.h"
 #include "qrs_utils.h"
@@ -85,4 +86,74 @@ int qrs_vector_median(int * input, int length)
 static int cmp_func_qsort (const void * a, const void * b)
 {
    return ( *(int*)a - *(int*)b );
+}
+
+int qrs_vector_max(int * input, int length)
+{
+    int i;
+    int max_elem = input[0];
+
+    for(i = 0; i < length; ++i)
+    {
+        max_elem = max(max_elem, input[i]);
+    }
+
+    return max_elem;
+}
+
+int qrs_vector_min(int * input, int length)
+{
+    int i;
+    int min_elem = input[0];
+
+    for(i = 0; i < length; ++i)
+    {
+        min_elem = min(min_elem, input[i]);
+    }
+
+    return min_elem;
+}
+
+int qrs_vector_max_range(int * input, int start, int end)
+{
+    int length = end - start + 1;
+    return qrs_vector_max(&input[start], length);
+}
+
+int qrs_vector_min_range(int * input, int start, int end)
+{
+    int length = end - start + 1;
+    return qrs_vector_min(&input[start], length);
+}
+
+void qrs_vector_minmax_idx_range(int * input, int start, int end,
+                                 int * min_idx, int * max_idx)
+{
+    int i;
+    int tmp_min = input[start];
+    int tmp_max = input[start];
+
+    for (i = start + 1; i <= end; ++i)
+    {
+        if (input[i] < tmp_min)
+        {
+            tmp_min = input[i];
+            *min_idx = i;
+        }
+        if (input[i] > tmp_max)
+        {
+            tmp_max = input[i];
+            *max_idx = i;
+        }
+    }
+}
+
+void qrs_vector_gt_treshold(int * in_out, int length, int treshold)
+{
+    int i;
+
+    for(i = 0; i < length; ++i)
+    {
+        in_out[i] = in_out[i] > treshold ? 1 : 0;
+    }
 }
