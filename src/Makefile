@@ -1,5 +1,5 @@
 CC = gcc # C compiler
-CFLAGS = -fPIC -Wextra -g # C flags
+CFLAGS = -fPIC -Wextra -Wall -fopenmp # C flags
 LDFLAGS = -shared -fopenmp # linking flags
 RM = rm -f # rm command
 TARGET_LIB = libqrs.so # target lib

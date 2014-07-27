@@ -24,6 +24,9 @@ static qrs_status qrs_integrate_over_window(int * input, int * output,
 static qrs_status qrs_filter_1d(int * input, int * output, int length,
                                 int * kernel, int kernel_length, int scale);
 
+static qrs_status qrs_box_filter_1d(int * input, int * output, int length,
+                                    int kernel_length, int scale);
+
 static qrs_status qrs_median_filter_1d(int * input, int * output,
                                        int length, int window_length);
 
@@ -206,7 +209,7 @@ static qrs_status qrs_integrate_over_window(int * input, int * output,
         kernel[i] = 1;
     }
     QRS_PROFILING_START(0);
-    status = qrs_filter_1d(input, temp_buff, length, kernel, kernel_length, 1);
+    status = qrs_box_filter_1d(input, temp_buff, length, kernel_length, 1);
     QRS_PROFILING_END("Box filter", 0);
     QRS_ASSERT(status == qrs_no_err, "Box filter failed.", bail);
 
@@ -255,6 +258,42 @@ bail:
     return status;
 }
 
+static qrs_status qrs_box_filter_1d(int * input, int * output, int length,
+                                    int kernel_length, int scale)
+{
+    qrs_status status = qrs_no_err;
+    int i, j, k;
+    int start;
+    int start_kernel;
+    int sum;
+
+    QRS_ASSERT_DO(input != NULL && output != NULL,
+                  status = qrs_bad_arg_err, "Input pointer NULL.", bail);
+
+    QRS_ASSERT_DO(length > kernel_length, status = qrs_bad_arg_err,
+                  "Invalid length and kernel length.", bail);
+
+#pragma omp parallel for default(none) \
+                         firstprivate(kernel_length, length, scale) \
+                         private(i, j, k, start, start_kernel, sum) \
+                         shared(input, output)
+    for(i = 0; i < length; ++i)
+    {
+        sum = 0;
+        start = i >= kernel_length ? i - kernel_length + 1 : 0;
+        start_kernel = i >= kernel_length ? 0 : kernel_length - i - 1;
+
+        for(j = start_kernel, k = 0; j < kernel_length; ++j, ++k)
+        {
+            sum += input[start + k];
+        }
+        output[i] = sum / (float) scale;
+    }
+
+bail:
+    return status;
+}
+
 static qrs_status qrs_median_filter_1d(int * input, int * output,
                                        int length, int window_length)
 {
@@ -271,8 +310,15 @@ static qrs_status qrs_median_filter_1d(int * input, int * output,
     QRS_ASSERT_DO(window != NULL, status = qrs_memalloc_err,
                   "Allocation failed.", bail);
 
+#pragma omp parallel default(none) \
+                     firstprivate(length, window_length) \
+                     private(window, i, j, start, num_elems_before) \
+                     shared(input, output)
+{
+    window = malloc(window_length * sizeof(int));
     num_elems_before = window_length / 2 ;
 
+    #pragma omp for
     for(i = 0; i < length; ++i)
     {
         start = i - num_elems_before;
@@ -289,6 +335,7 @@ static qrs_status qrs_median_filter_1d(int * input, int * output,
         }
         output[i] = qrs_vector_median(window, window_length);
     }
+} /* end of omp parallel region */
 
 bail:
     QRS_FREE(window);

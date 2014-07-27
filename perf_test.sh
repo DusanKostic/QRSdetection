@@ -13,6 +13,8 @@ make
 rm perf_report.txt
 touch perf_report.txt
 
+export OMP_NUM_THREADS=4
+
 for (( i=1; i<=$NUM_TESTS; i++ ))
 do
   echo "Test no. $i"
