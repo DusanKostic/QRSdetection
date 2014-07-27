@@ -4,6 +4,7 @@
  *  Created on: Jul 19, 2014
  *      Author: Dusan Kostic
  */
+#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -59,28 +60,38 @@ qrs_status qrs_detection_core(qrs_signal * input, int ** r_peaks_idx,
                   "Bad input arguments - NULL pointer.", bail);
 
     /* Find mean value of input signal */
+    QRS_PROFILING_START(0);
     mean_value = qrs_calc_mean_value(input->data, input->length);
+    QRS_PROFILING_END("Mean value", 0);
 
     /* Remove mean from input signal */
+    QRS_PROFILING_START(1);
     status = qrs_vector_sub_const(input->data, input->length, mean_value);
+    QRS_PROFILING_END("Remove mean", 1);
     QRS_ASSERT(status == qrs_no_err, "Remove mean from input failed.", bail);
 
     /* Differentiate data */
+    QRS_PROFILING_START(2);
     diff_length = input->length - 1;
     diff_data = malloc(diff_length * sizeof(int));
     QRS_ASSERT(diff_data != NULL, "Allocation failed.", bail);
 
     status = qrs_differentiate_vector(input->data, diff_data, input->length);
+    QRS_PROFILING_END("Differentiate", 2);
     QRS_ASSERT(status == qrs_no_err, "Differentiate input data failed.", bail);
 
     /* Square differentiated data */
+    QRS_PROFILING_START(3);
     status = qrs_vector_mul(diff_data, diff_data, diff_length);
+    QRS_PROFILING_END("Square", 3);
     QRS_ASSERT(status == qrs_no_err, "Square data failed.", bail);
 
     /* Integrate data over window */
+    QRS_PROFILING_START(4);
     integral_data = malloc(diff_length * sizeof(int));
     status = qrs_integrate_over_window(diff_data, integral_data, diff_length,
                                        input->frequency, &delay);
+    QRS_PROFILING_END("Integrate", 4);
     QRS_ASSERT(status == qrs_no_err, "Integration of data failed.", bail);
 
     /* Remove filter delay for scanning back through ECG */
@@ -89,21 +100,28 @@ qrs_status qrs_detection_core(qrs_signal * input, int ** r_peaks_idx,
     integral_length = diff_length - (delay - 1);
 
     /* Segment search area, first find the highest bumps */
+    QRS_PROFILING_START(5);
     start = round(diff_length / 4.0) - 1;
     end   = round(3 * diff_length / 4.0) - 1;
     max_value = qrs_vector_max_range(integral_data, start, end);
+    QRS_PROFILING_END("Segment", 5);
 
     /* Build an array of segments to look in */
+    QRS_PROFILING_START(6);
     treshold = QRS_TRESHOLD * max_value;
     qrs_vector_gt_treshold(integral_data, integral_length, treshold);
+    QRS_PROFILING_END("Treshold", 6);
 
     /* Find indices into boundaries of each segment */
+    QRS_PROFILING_START(7);
     status = qrs_find_indices_into_boundaries(integral_data, integral_length,
                                               &left_indices, &right_indices,
                                               &left_ind_len, &right_ind_len);
+    QRS_PROFILING_END("Indices", 7);
     QRS_ASSERT(status == qrs_no_err, "Find indices failed.", bail);
 
      /* Loop through all possibilities */
+    QRS_PROFILING_START(8);
     end = min(left_ind_len, right_ind_len);
 
     *r_peaks_idx = malloc(end * sizeof(int));
@@ -122,6 +140,7 @@ qrs_status qrs_detection_core(qrs_signal * input, int ** r_peaks_idx,
     {
         swap_pointers(r_peaks_idx, s_peaks_idx);
     }
+    QRS_PROFILING_END("Find peaks", 8);
 
 bail:
     QRS_FREE(diff_data);
@@ -186,11 +205,15 @@ static qrs_status qrs_integrate_over_window(int * input, int * output,
     {
         kernel[i] = 1;
     }
+    QRS_PROFILING_START(0);
     status = qrs_filter_1d(input, temp_buff, length, kernel, kernel_length, 1);
+    QRS_PROFILING_END("Box filter", 0);
     QRS_ASSERT(status == qrs_no_err, "Box filter failed.", bail);
 
     /* Median filtering of input data over window */
+    QRS_PROFILING_START(1);
     status = qrs_median_filter_1d(temp_buff, output, length, QRS_MEDFILT_WINDOW);
+    QRS_PROFILING_END("Median filter", 1);
     QRS_ASSERT(status == qrs_no_err, "Median filter failed.", bail);
 
 bail:
