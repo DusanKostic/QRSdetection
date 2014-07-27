@@ -16,11 +16,11 @@
  * Acquire input filename, output filename,
  * length and frequency from command line or ini file.
  */
-#define INPUT_FILENAME  "./testdb/rec_1.txt"
+#define INPUT_FILENAME  "./testdb/rec_2.txt"
 #define RPEAKS_FILENAME "./test/rpeaks_1.txt"
 #define SPEAKS_FILENAME "./test/speaks_1.txt"
-#define INPUT_LENGTH    (10000)
-#define INPUT_FREQUENCY (500)
+#define INPUT_LENGTH    (1800000)
+#define INPUT_FREQUENCY (250)
 #define LOG_FILENAME    "./test/qrs_log.txt"
 
 int main(int argc, char * argv[])

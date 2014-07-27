@@ -132,20 +132,24 @@ void qrs_vector_minmax_idx_range(int * input, int start, int end,
     int i;
     int tmp_min = input[start];
     int tmp_max = input[start];
+    int tmp_min_idx = start;
+    int tmp_max_idx = start;
 
     for (i = start + 1; i <= end; ++i)
     {
         if (input[i] < tmp_min)
         {
             tmp_min = input[i];
-            *min_idx = i;
+            tmp_min_idx = i;
         }
         if (input[i] > tmp_max)
         {
             tmp_max = input[i];
-            *max_idx = i;
+            tmp_max_idx = i;
         }
     }
+    *min_idx = tmp_min_idx;
+    *max_idx = tmp_max_idx;
 }
 
 void qrs_vector_gt_treshold(int * in_out, int length, int treshold)

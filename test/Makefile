@@ -19,8 +19,8 @@ $(EXECUTABLE): $(OBJECTS)
 
 .PHONY: clean
 clean:
-	rm -f ${OBJECTS} ${EXECUTABLE}
+	rm -f ${OBJECTS} ${EXECUTABLE} *.txt
 
 .PHONY: run
 run:
-	./qrstest ../testdb/aaa/100.txt ./rpeaks_1.txt ./speaks_1.txt ./qrs_log.txt 1800000 250
+	./qrstest ../testdb/rec_2.txt ./rpeaks_1.txt ./speaks_1.txt ./qrs_log.txt 1800000 250

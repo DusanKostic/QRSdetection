@@ -33,6 +33,8 @@ qrs_find_indices_into_boundaries(int * input, int length,
 
 static void check_and_realloc(int ** input, int curr_cnt, int * curr_length);
 
+static void swap_pointers(int ** a, int ** b);
+
 qrs_status qrs_detection_core(qrs_signal * input, int ** r_peaks_idx,
                               int ** s_peaks_idx, int * peak_number)
 {
@@ -101,7 +103,7 @@ qrs_status qrs_detection_core(qrs_signal * input, int ** r_peaks_idx,
                                               &left_ind_len, &right_ind_len);
     QRS_ASSERT(status == qrs_no_err, "Find indices failed.", bail);
 
-    /* Loop through all possibilities */
+     /* Loop through all possibilities */
     end = min(left_ind_len, right_ind_len);
 
     *r_peaks_idx = malloc(end * sizeof(int));
@@ -115,6 +117,11 @@ qrs_status qrs_detection_core(qrs_signal * input, int ** r_peaks_idx,
                                     &(*s_peaks_idx)[i], &(*r_peaks_idx)[i]);
     }
     *peak_number = end;
+
+    if ((*s_peaks_idx)[end - 1] < (*r_peaks_idx)[end - 1])
+    {
+        swap_pointers(r_peaks_idx, s_peaks_idx);
+    }
 
 bail:
     QRS_FREE(diff_data);
@@ -338,4 +345,12 @@ static void check_and_realloc(int ** input, int curr_cnt, int * curr_length)
         *input = realloc(*input, new_length * sizeof(int));
         *curr_length = new_length;
     }
+}
+
+static void swap_pointers(int ** a, int ** b)
+{
+    int * tmp;
+    tmp = *a;
+    *a = *b;
+    *b = tmp;
 }
